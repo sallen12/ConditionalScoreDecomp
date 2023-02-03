@@ -1,13 +1,43 @@
-#' Brier score decompositions
+#' Decompositions of the Brier score
 #'
-#' @param p vector of probability forecasts.
+#' Calculate decompositions of the Brier score into uncertainty, resolution, and
+#' reliability components. A conditional decomposition can also be peformed that
+#' calculates these terms conditional on some events, or states having occurred.
+#'
 #' @param o vector of binary outcomes.
+#' @param p vector of probability forecasts.
 #' @param states vector of states on which to perform the conditional decomposition.
 #' @param bins integer; number of bins to use in the decomposition.
 #' @param method string; the method to be used to estimate the decomposition terms.
 #'
 #' @details
-#' The vector \code{p} of
+#' The vectors \code{p}, \code{o}, and \code{states} (if used) should have the
+#' same length.
+#'
+#' \code{o} is a numeric vector of values that are either 0 or 1, representing
+#' the observed values.
+#' \code{p} is a numeric vector of values between 0 and 1, representing the
+#' corresponding probability forecasts.
+#' \code{states} is a character vector, with \code{states[i]} corresponding to
+#' the state that occurs when \code{p[i]} is forecast and \code{o[i]} is observed.
+#' The number of unique states should be small compared to the number of observations.
+#'
+#' The \code{bins} argument specifies how many bins will be used when calculating
+#' the decomposition. The default is the number of unique elements in \code{p}.
+#' A warning is returned if this is large compared to the number of observations.
+#' This argument is not required when the decomposition is calculated using
+#' isotonic regression (\code{method = "isotonic"}).
+#'
+#' The \code{method} argument takes three possible options: \code{method = "classical"},
+#' performs the classical decomposition of the Brier score that was proposed by
+#' Murphy (1973); \code{method = "bias-corrected"} performs the bias-corrected
+#' decomposition proposed by Ferro and Fricker (2012), which is more appropriate
+#' for small sample sizes; \code{method = "isotonic"} performs the
+#' decomposition based on isotonic regression proposed by Dimitriadies et al. (2021).
+#' See references below.
+#'
+#' Calculation of the unconditional Brier score decomposition (\code{bs_decomp})
+#' leverages the \pkg{SpecsVerification} and \pkg{reliabilitydiag} packages.
 #'
 #' @return A named vector containing the decomposition terms.
 #'
@@ -20,15 +50,19 @@
 #'
 #' \emph{Bias-corrected decomposition of the Brier score}
 #'
-#' Ferro, C.A.T. and T.E. Fricker (2012): `A bias‐corrected decomposition of the Brier score', \emph{Quarterly Journal of the Royal Meteorological Society} 138, 1954-1960. \doi{10.1002/qj.1924}
+#' Ferro, C.A.T. and T.E. Fricker (2012): `A bias‐corrected decomposition of the Brier score. \emph{Quarterly Journal of the Royal Meteorological Society} 138, 1954-1960. \doi{10.1002/qj.1924}
+#'
+#' \emph{Isotonic regression-based decomposition of the Brier score}
+#'
+#' Dimitriadis, T., Gneiting, T. and A.I. Jordan (2021): `Stable reliability diagrams for probabilistic classifiers'. \emph{Proceedings of the National Academy of Sciences} 118, e2016191118. \doi{10.1073/pnas.2016191118}
 #'
 #' \emph{Decomposition of proper scoring rules}
 #'
-#' Bröcker, J. (2009): `Reliability, sufficiency, and the decomposition of proper scores', \emph{Quarterly Journal of the Royal Meteorological Society} 135, 1512-1519. \doi{10.1002/qj.456}
+#' Bröcker, J. (2009): `Reliability, sufficiency, and the decomposition of proper scores'. \emph{Quarterly Journal of the Royal Meteorological Society} 135, 1512-1519. \doi{10.1002/qj.456}
 #'
 #' \emph{Conditional decomposition of proper scoring rules}
 #'
-#' Allen, S., Ferro, C.A.T. and F. Kwasniok (2023): `A conditional decomposition of proper scores: quantifying the sources of information in a forecast', \emph{Quarterly Journal of the Royal Meteorological Society}
+#' Allen, S., Ferro, C.A.T. and F. Kwasniok (2023): `A conditional decomposition of proper scores: quantifying the sources of information in a forecast'. \emph{Quarterly Journal of the Royal Meteorological Society}
 #'
 #'
 #' @examples
@@ -38,27 +72,27 @@
 #'
 #' # unconditional decomposition
 #'
-#' bs_decomp(p = p, o = o, bins = 10)
-#' bs_decomp(p = p_disc, o = o)
-#' bs_decomp(p = p, o = o, bins = 10, method = "classical")
-#' bs_decomp(p = p, o = o, method = "isotonic")
+#' bs_decomp(o = o, p = p, bins = 10)
+#' bs_decomp(o = o, p = p_disc)
+#' bs_decomp(o = o, p = p, bins = 10, method = "classical")
+#' bs_decomp(o = o, p = p, method = "isotonic")
 #'
 #' # conditional decomposition
 #'
 #' states = rep(c("G1", "G2"), each = 50)
 #'
-#' bs_decomp_cond(p = p, o = o, states = states, bins = 10)
-#' bs_decomp_cond(p = p_disc, o = o, states = states)
-#' bs_decomp_cond(p = p, o = o, states = states, bins = 10, method = "classical")
-#' bs_decomp_cond(p = p, o = o, states = states, method = "isotonic")
+#' bs_decomp_cond(o = o, p = p, states = states, bins = 10)
+#' bs_decomp_cond(o = o, p = p_disc, states = states)
+#' bs_decomp_cond(o = o, p = p, states = states, bins = 10, method = "classical")
+#' bs_decomp_cond(o = o, p = p, states = states, method = "isotonic")
 #'
 #' @name bs_decomp
 
 #' @rdname bs_decomp
 #' @export
-bs_decomp <- function(p, o, bins = NULL, method = "bias_corrected"){
+bs_decomp <- function(o, p, bins = NULL, method = "bias_corrected"){
   if(method == "isotonic"){
-    terms <- bs_decomp_iso(p, o)
+    terms <- bs_decomp_iso(o, p)
   }else if(method %in% c("classical", "bias_corrected")){
     if(is.null(bins)){
       bins <- length(unique(p))
@@ -73,7 +107,7 @@ bs_decomp <- function(p, o, bins = NULL, method = "bias_corrected"){
 
 #' @rdname bs_decomp
 #' @export
-bs_decomp_cond <- function(p, o, states, bins = NULL, method = "bias_corrected"){
+bs_decomp_cond <- function(o, p, states, bins = NULL, method = "bias_corrected"){
 
   groups <- unique(states)
   n_j <- sapply(seq_along(groups), function(j) sum(states == groups[j]))
@@ -81,9 +115,9 @@ bs_decomp_cond <- function(p, o, states, bins = NULL, method = "bias_corrected")
 
   if(method == "isotonic"){
 
-    terms_un <- bs_decomp_iso(p, o) # unconditional terms
+    terms_un <- bs_decomp_iso(o, p) # unconditional terms
     terms_cnd <- sapply(seq_along(groups), function(j)
-      bs_decomp_iso(p[states == groups[j]], o[states == groups[j]])) # conditional terms
+      bs_decomp_iso(o[states == groups[j]], p[states == groups[j]])) # conditional terms
 
     unc_A <- sum((n_j/N)*terms_cnd['UNC', ])
     res_fA <- sum((n_j/N)*terms_cnd['RES', ])
@@ -147,7 +181,7 @@ bs_decomp_cond <- function(p, o, states, bins = NULL, method = "bias_corrected")
 }
 
 # function to obtain Brier score decomposition terms from isotonic regression
-bs_decomp_iso <- function(p, o, bins, states = NULL){
+bs_decomp_iso <- function(o, p, bins, states = NULL){
   na_ind <- is.na(o)
   diag_obj <- reliabilitydiag::reliabilitydiag(x = p[!na_ind], y = o[!na_ind])
   terms <- c(summary(diag_obj)$uncertainty,
