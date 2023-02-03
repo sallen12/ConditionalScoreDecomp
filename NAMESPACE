@@ -2,4 +2,4 @@
 
 export(bs_decomp)
 export(bs_decomp_cond)
-export(waterfall_plot)
+export(plot_decomp)
