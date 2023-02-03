@@ -2,32 +2,72 @@
 % Please edit documentation in R/bs_decomp.R
 \name{bs_decomp}
 \alias{bs_decomp}
-\title{unconditional Brier score decomposition terms}
+\alias{bs_decomp_cond}
+\title{Brier score decompositions}
 \usage{
 bs_decomp(p, o, bins = NULL, method = "bias_corrected")
+
+bs_decomp_cond(p, o, states, bins = NULL, method = "bias_corrected")
 }
 \arguments{
 \item{p}{vector of probability forecasts.}
 
 \item{o}{vector of binary outcomes.}
 
-\item{bins}{number of bins to use in the decomposition.}
+\item{bins}{integer; number of bins to use in the decomposition.}
 
-\item{method}{string specifying which method should be used to estimate the decomposition terms.}
+\item{method}{string; the method to be used to estimate the decomposition terms.}
+
+\item{states}{vector of states on which to perform the conditional decomposition.}
 }
 \value{
 A named vector containing the decomposition terms.
 }
 \description{
-unconditional Brier score decomposition terms
+Brier score decompositions
+}
+\details{
+The vector \code{p} of
 }
 \examples{
 p <- runif(100)
 o <- rbinom(100, 1, 0.5)
 p_disc <- sample(seq(0, 1, 0.1), 100, TRUE)
 
+# unconditional decomposition
+
 bs_decomp(p = p, o = o, bins = 10)
 bs_decomp(p = p_disc, o = o)
 bs_decomp(p = p, o = o, bins = 10, method = "classical")
 bs_decomp(p = p, o = o, method = "isotonic")
+
+# conditional decomposition
+
+states = rep(c("G1", "G2"), each = 50)
+
+bs_decomp_cond(p = p, o = o, states = states, bins = 10)
+bs_decomp_cond(p = p_disc, o = o, states = states)
+bs_decomp_cond(p = p, o = o, states = states, bins = 10, method = "classical")
+bs_decomp_cond(p = p, o = o, states = states, method = "isotonic")
+
+}
+\references{
+\emph{Decomposition of the Brier score}
+
+Murphy, A.H. (1973): `A new vector partition of the probability score'. \emph{Journal of Applied Meteorology and Climatology} 12, 595-600. \doi{10.1175/1520-0450(1973)012<0595:ANVPOT>2.0.CO;2}
+
+\emph{Bias-corrected decomposition of the Brier score}
+
+Ferro, C.A.T. and T.E. Fricker (2012): `A bias‐corrected decomposition of the Brier score', \emph{Quarterly Journal of the Royal Meteorological Society} 138, 1954-1960. \doi{10.1002/qj.1924}
+
+\emph{Decomposition of proper scoring rules}
+
+Bröcker, J. (2009): `Reliability, sufficiency, and the decomposition of proper scores', \emph{Quarterly Journal of the Royal Meteorological Society} 135, 1512-1519. \doi{10.1002/qj.456}
+
+\emph{Conditional decomposition of proper scoring rules}
+
+Allen, S., Ferro, C.A.T. and F. Kwasniok (2023): `A conditional decomposition of proper scores: quantifying the sources of information in a forecast', \emph{Quarterly Journal of the Royal Meteorological Society}
+}
+\author{
+Sam Allen
 }
