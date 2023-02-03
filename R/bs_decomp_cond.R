@@ -1,9 +1,25 @@
-# function to obtain conditional Brier score decomposition terms
-bs_decomp_cond <- function(p, o, states, method = "bias_corrected"){
-
-  states <- states[!is.na(o)]
-  p <- p[!is.na(o)]
-  o <- o[!is.na(o)]
+#' conditional Brier score decomposition
+#'
+#' @param p vector of probability forecasts.
+#' @param o vector of binary outcomes.
+#' @param states vector of states on which to perform the conditional decomposition.
+#' @param bins number of bins to use in the decomposition.
+#' @param method string specifying which method should be used to estimate the decomposition terms.
+#'
+#' @return A named vector containing the decomposition terms.
+#' @export
+#'
+#' @examples
+#' p <- runif(100)
+#' o <- rbinom(100, 1, 0.5)
+#' p_disc <- sample(seq(0, 1, 0.1), 100, TRUE)
+#' states = rep(c("G1", "G2"), each = 50)
+#'
+#' bs_decomp_cond(p = p, o = o, states = states, bins = 10)
+#' bs_decomp_cond(p = p_disc, o = o, states = states)
+#' bs_decomp_cond(p = p, o = o, states = states, bins = 10, method = "classical")
+#' bs_decomp_cond(p = p, o = o, states = states, method = "isotonic")
+bs_decomp_cond <- function(p, o, states, bins = NULL, method = "bias_corrected"){
 
   groups <- unique(states)
   n_j <- sapply(seq_along(groups), function(j) sum(states == groups[j]))
@@ -12,7 +28,8 @@ bs_decomp_cond <- function(p, o, states, method = "bias_corrected"){
   if(method == "isotonic"){
 
     terms_un <- bs_decomp_iso(p, o) # unconditional terms
-    terms_cnd <- sapply(seq_along(groups), function(j) bs_decomp_iso(p[states == j], o[states == j])) # conditional terms
+    terms_cnd <- sapply(seq_along(groups), function(j)
+      bs_decomp_iso(p[states == groups[j]], o[states == groups[j]])) # conditional terms
 
     unc_A <- sum((n_j/N)*terms_cnd['UNC', ])
     res_fA <- sum((n_j/N)*terms_cnd['RES', ])
@@ -22,6 +39,11 @@ bs_decomp_cond <- function(p, o, states, method = "bias_corrected"){
     res_Af <- rel_fA - terms_un['REL']
 
   }else if(method %in% c("classical", "bias_corrected")){
+
+    if(is.null(bins)){
+      bins <- length(unique(p))
+      warning("Taking bins to be the number of unique values of p")
+    }
 
     forecasts <- unique(p)
     obar <- mean(o)

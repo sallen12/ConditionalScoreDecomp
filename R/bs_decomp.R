@@ -1,47 +1,40 @@
-# function to obtain unconditional Brier score decomposition terms
-bs_decomp <- function(p, o, method = "bias_corrected"){
-
-  p <- p[!is.na(o)]
-  o <- o[!is.na(o)]
-
+#' unconditional Brier score decomposition terms
+#'
+#' @param p vector of probability forecasts.
+#' @param o vector of binary outcomes.
+#' @param bins number of bins to use in the decomposition.
+#' @param method string specifying which method should be used to estimate the decomposition terms.
+#'
+#' @return A named vector containing the decomposition terms.
+#' @export
+#'
+#' @examples
+#' p <- runif(100)
+#' o <- rbinom(100, 1, 0.5)
+#' p_disc <- sample(seq(0, 1, 0.1), 100, TRUE)
+#'
+#' bs_decomp(p = p, o = o, bins = 10)
+#' bs_decomp(p = p_disc, o = o)
+#' bs_decomp(p = p, o = o, bins = 10, method = "classical")
+#' bs_decomp(p = p, o = o, method = "isotonic")
+bs_decomp <- function(p, o, bins = NULL, method = "bias_corrected"){
   if(method == "isotonic"){
-
     terms <- bs_decomp_iso(p, o)
-
   }else if(method %in% c("classical", "bias_corrected")){
-
-    forecasts <- unique(p)
-    N <- length(o)
-    obar <- mean(o)
-
-    n_k <- sapply(seq_along(forecasts), function(k) sum(p == forecasts[k]))
-    o_k <- sapply(seq_along(forecasts), function(k) sum(o[p == forecasts[k]]))
-    obar_k <- sapply(seq_along(forecasts), function(k) mean(o[p == forecasts[k]]))
-
-    unc <- obar*(1 - obar)
-    res <- sum((n_k/N)*((obar_k - obar)^2))
-    rel <- sum((n_k/N)*((obar_k - forecasts)^2))
-
-    if(method == "bias_corrected"){
-      unc <- unc + unc/(N - 1)
-      res <- res + unc/(N - 1) - sum(n_k*obar_k*(1 - obar_k)/(n_k - 1))/N
-      rel <- rel - sum(n_k*obar_k*(1 - obar_k)/(n_k - 1))/N
+    if(is.null(bins)){
+      bins <- length(unique(p))
+      warning("Taking bins to be the number of unique values of p")
     }
-
-    tot <- unc - res + rel
-    terms <- c(unc, res, rel, tot)
+    terms <- SpecsVerification::BrierDecomp(p, o, bins, bias.corrected = (method == "bias_corrected"))
+    terms <- c(terms[1, c("UNC", "RES", "REL")], terms[1, "UNC"] - terms[1, "RES"] + terms[1, "REL"])
     names(terms) <- c("UNC", "RES", "REL", "TOT")
-
   }
-
   return(terms)
-
 }
 
 # function to obtain unconditional Brier score decomposition terms from isotonic regression
-bs_decomp_iso <- function(p, o, states = NULL){
+bs_decomp_iso <- function(p, o, bins, states = NULL){
   na_ind <- is.na(o)
-
   diag_obj <- reliabilitydiag::reliabilitydiag(x = p[!na_ind], y = o[!na_ind])
   terms <- c(summary(diag_obj)$uncertainty,
              summary(diag_obj)$discrimination,
