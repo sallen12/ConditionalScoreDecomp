@@ -7,37 +7,22 @@
 #' @param terms_un vector containing the unconditional decomposition terms.
 #' @param terms_cnd vector containing the conditional decomposition terms.
 #' @param title optional title of the plot.
-#' @param scale amount by which to scale the decomposition terms.
 #' @param waterfall logical specifying whether a waterfall plot should be used.
 #'
 #' @details
-#' The vectors \code{p}, \code{o}, and \code{states} (if used) should have the
-#' same length.
+#' These plot functions take decomposition terms as inputs, and return a plot
+#' containing these values. Two plots are available, a bar plot (default) and a
+#' waterfall plot (\code{waterfall = TRUE}).
 #'
-#' \code{o} is a numeric vector of values that are either 0 or 1, representing
-#' the observed values.
-#' \code{p} is a numeric vector of values between 0 and 1, representing the
-#' corresponding probability forecasts.
-#' \code{states} is a character vector, with \code{states[i]} corresponding to
-#' the state that occurs when \code{p[i]} is forecast and \code{o[i]} is observed.
-#' The number of unique states should be small compared to the number of observations.
-#'
-#' The \code{bins} argument specifies how many bins will be used when calculating
-#' the decomposition. The default is the number of unique elements in \code{p}.
-#' A warning is returned if this is large compared to the number of observations.
-#' This argument is not required when the decomposition is calculated using
-#' isotonic regression (\code{method = "isotonic"}).
-#'
-#' The \code{method} argument takes three possible options: \code{method = "classical"},
-#' performs the classical decomposition of the Brier score that was proposed by
-#' Murphy (1973); \code{method = "bias-corrected"} performs the bias-corrected
-#' decomposition proposed by Ferro and Fricker (2012), which is more appropriate
-#' for small sample sizes; \code{method = "isotonic"} performs the
-#' decomposition based on isotonic regression proposed by Dimitriadies et al. (2021).
-#' See references below.
-#'
-#' Calculation of the unconditional Brier score decomposition (\code{bs_decomp})
-#' leverages the \pkg{SpecsVerification} and \pkg{reliabilitydiag} packages.
+#' Decomposition terms should be inputted using \code{terms_un} and \code{terms_cnd}.
+#' \code{terms_un} contains a vector with the uncertainty, resolution, reliability,
+#' and total score. Note that this must be the ordering of the inputs.
+#' \code{terms_unc} contains a vector with the conditional uncertainty, the resolution
+#' of the states, the resolution of the forecasts given the states, the resolution
+#' of the states given the forecasts, and the reliability of the forecasts given
+#' the states.
+#' These inputs are designed to correspond to the output from \code{\link{bs_decomp}}
+#' and \code{\link{bs_decomp_cond}}.
 #'
 #' @author Sam Allen
 #'
@@ -67,7 +52,6 @@
 #'
 #' plot_decomp(terms_un, terms_cnd)
 #' plot_decomp(terms_un, terms_cnd, waterfall = TRUE)
-#'
 #'
 #' @name plot_decomp
 
