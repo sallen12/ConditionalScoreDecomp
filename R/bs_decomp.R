@@ -1,7 +1,7 @@
 #' Decompositions of the Brier score
 #'
 #' Calculate decompositions of the Brier score into uncertainty, resolution, and
-#' reliability components. A conditional decomposition can also be peformed that
+#' reliability components. A conditional decomposition can also be performed that
 #' calculates these terms conditional on some events, or states having occurred.
 #'
 #' @param o vector of binary outcomes.
@@ -90,25 +90,33 @@
 
 #' @rdname bs_decomp
 #' @export
-bs_decomp <- function(o, p, bins = NULL, method = "bias_corrected"){
-  if(method == "isotonic"){
+bs_decomp <- function(o, p, bins = NULL, method = "bias-corrected") {
+  check_input(o, p)
+  if (method == "isotonic") {
     terms <- bs_decomp_iso(o, p)
-  }else if(method %in% c("classical", "bias_corrected")){
-    if(is.null(bins)){
-      bins <- length(unique(p))
+  } else if (method %in% c("classical", "bias-corrected")) {
+    if (is.null(bins)) {
       message("Taking bins to be the number of unique values of p")
+      bins <- length(unique(p))
+      if (bins/length(p) > 0.2) {
+        warning("Number of bins is large relative to the number of observations.
+                Consider specifying 'bins' manually.")
+      }
     }
-    terms <- SpecsVerification::BrierDecomp(p, o, bins, bias.corrected = (method == "bias_corrected"))
+    terms <- SpecsVerification::BrierDecomp(p, o, bins, bias.corrected = (method == "bias-corrected"))
     terms <- c(terms[1, c("UNC", "RES", "REL")], terms[1, "UNC"] - terms[1, "RES"] + terms[1, "REL"])
     names(terms) <- c("UNC", "RES", "REL", "TOT")
+  } else {
+    stop("method not recognised. It must be one of 'classical', 'bias-corrected',
+         and 'isotonic'")
   }
   return(terms)
 }
 
 #' @rdname bs_decomp
 #' @export
-bs_decomp_cond <- function(o, p, states, bins = NULL, method = "bias_corrected"){
-
+bs_decomp_cond <- function(o, p, states, bins = NULL, method = "bias-corrected"){
+  check_input(o, p, states)
   groups <- unique(states)
   n_j <- sapply(seq_along(groups), function(j) sum(states == groups[j]))
   N <- length(o)
@@ -126,27 +134,26 @@ bs_decomp_cond <- function(o, p, states, bins = NULL, method = "bias_corrected")
     res_A <- terms_un['UNC'] - unc_A
     res_Af <- rel_fA - terms_un['REL']
 
-  }else if(method %in% c("classical", "bias_corrected")){
+  }else if(method %in% c("classical", "bias-corrected")){
 
-    if(is.null(bins)){
-      bins <- length(unique(p))
+    if (is.null(bins)) {
       message("Taking bins to be the number of unique values of p")
+      bins <- length(unique(p))
+      if (bins/length(p) > 0.2) {
+        warning("Number of bins is large relative to the number of observations.
+                Consider specifying 'bins' manually.")
+      }
     }
 
     forecasts <- unique(p)
     obar <- mean(o)
 
     n_k <- sapply(seq_along(forecasts), function(k) sum(p == forecasts[k]))
-    o_k <- sapply(seq_along(forecasts), function(k) sum(o[p == forecasts[k]]))
-    obar_k <- sapply(seq_along(forecasts), function(k) mean(o[p == forecasts[k]]))
-
-    o_j <- sapply(seq_along(groups), function(j) sum(o[states == groups[j]]))
-    obar_j <- sapply(seq_along(groups), function(j) mean(o[states == groups[j]]))
-
     n_kj <- sapply(seq_along(forecasts), function(k)
       sapply(seq_along(groups), function(j) sum(p == forecasts[k] & states == groups[j])))
-    o_kj <- sapply(seq_along(forecasts), function(k)
-      sapply(seq_along(groups), function(j) sum(o[p == forecasts[k] & states == groups[j]])))
+
+    obar_k <- sapply(seq_along(forecasts), function(k) mean(o[p == forecasts[k]]))
+    obar_j <- sapply(seq_along(groups), function(j) mean(o[states == groups[j]]))
     obar_kj <- sapply(seq_along(forecasts), function(k)
       sapply(seq_along(groups), function(j) mean(o[p == forecasts[k] & states == groups[j]])))
 
@@ -157,7 +164,18 @@ bs_decomp_cond <- function(o, p, states, bins = NULL, method = "bias_corrected")
     rel_fA <- sum(t(n_kj/N)*((forecasts - t(obar_kj))^2), na.rm = T)
     tot <- unc_A - res_fA + rel_fA
 
-    if(method == "bias_corrected"){
+    if(method == "bias-corrected"){
+      if (any(n_k == 1)) {
+        stop("There is a forecast value that only occurs once. The bias-corrected
+             method cannot be used in this case.")
+      } else if (any(n_j == 1)) {
+        stop("There is a state that only occurs once. The bias-corrected
+             method cannot be used in this case.")
+      } else if (any(n_kj == 1)) {
+        stop("There is a forecast-state combination that only occurs once.
+             The bias-corrected method cannot be used in this case.")
+      }
+
       bias1 <- sum(n_j*obar_j*(1 - obar_j)/(n_j - 1))/N
       bias2 <- obar*(1 - obar)/(N - 1)
       bias3 <- sum(n_kj*obar_kj*(1 - obar_kj)/(n_kj - 1), na.rm = T)/N
@@ -170,6 +188,9 @@ bs_decomp_cond <- function(o, p, states, bins = NULL, method = "bias_corrected")
       rel_fA <- rel_fA - bias3
     }
 
+  } else {
+    stop("method not recognised. It must be one of 'classical', 'bias-corrected',
+         and 'isotonic'")
   }
 
   tot <- unc_A - res_fA + rel_fA
@@ -182,8 +203,7 @@ bs_decomp_cond <- function(o, p, states, bins = NULL, method = "bias_corrected")
 
 # function to obtain Brier score decomposition terms from isotonic regression
 bs_decomp_iso <- function(o, p, bins, states = NULL){
-  na_ind <- is.na(o)
-  diag_obj <- reliabilitydiag::reliabilitydiag(x = p[!na_ind], y = o[!na_ind])
+  diag_obj <- reliabilitydiag::reliabilitydiag(x = p, y = o)
   terms <- c(summary(diag_obj)$uncertainty,
              summary(diag_obj)$discrimination,
              summary(diag_obj)$miscalibration,
@@ -191,3 +211,28 @@ bs_decomp_iso <- function(o, p, bins, states = NULL){
   names(terms) <- c("UNC", "RES", "REL", "TOT")
   return(terms)
 }
+
+# function to check function inputs
+check_input <- function(o, p, states = NULL) {
+  if (!identical(length(o), length(p))) {
+    stop("o and p must have the same length.")
+  }
+  if (any(is.na(o)) | any(is.na(p)) | any(is.na(states))) {
+    stop("Input contains missing values.")
+  }
+  if (!all(o %in% c(0, 1))) {
+    stop("o must only contain values that are either zero or one.")
+  }
+  if (!all(p >= 0 & p <= 1)) {
+    stop("p must only contain values that are between zero and one.")
+  }
+  if (!is.null(states)) {
+    if (!identical(length(o), length(states))) {
+      stop("o, p and states must all have the same length.")
+    }
+  }
+}
+
+
+
+
