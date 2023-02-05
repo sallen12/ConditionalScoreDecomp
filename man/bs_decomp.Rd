@@ -5,9 +5,9 @@
 \alias{bs_decomp_cond}
 \title{Decompositions of the Brier score}
 \usage{
-bs_decomp(o, p, bins = NULL, method = "bias_corrected")
+bs_decomp(o, p, bins = NULL, method = "bias-corrected")
 
-bs_decomp_cond(o, p, states, bins = NULL, method = "bias_corrected")
+bs_decomp_cond(o, p, states, bins = NULL, method = "bias-corrected")
 }
 \arguments{
 \item{o}{vector of binary outcomes.}
@@ -25,7 +25,7 @@ A named vector containing the decomposition terms.
 }
 \description{
 Calculate decompositions of the Brier score into uncertainty, resolution, and
-reliability components. A conditional decomposition can also be peformed that
+reliability components. A conditional decomposition can also be performed that
 calculates these terms conditional on some events, or states having occurred.
 }
 \details{
@@ -52,10 +52,11 @@ Murphy (1973); \code{method = "bias-corrected"} performs the bias-corrected
 decomposition proposed by Ferro and Fricker (2012), which is more appropriate
 for small sample sizes; \code{method = "isotonic"} performs the
 decomposition based on isotonic regression proposed by Dimitriadies et al. (2021).
-See references below.
+See references below. Note that the bias-corrected approach may return negative
+estimates of the three terms.
 
-Calculation of the unconditional Brier score decomposition (\code{bs_decomp})
-leverages the \pkg{SpecsVerification} and \pkg{reliabilitydiag} packages.
+Calculation of the Brier score decompositions using isotonic regression
+leverages the \pkg{reliabilitydiag} package.
 }
 \examples{
 p <- runif(100)

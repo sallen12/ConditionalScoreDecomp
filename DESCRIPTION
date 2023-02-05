@@ -17,8 +17,7 @@ LazyData: true
 Imports: 
     ggplot2,
     gridExtra,
-    scales,
-    SpecsVerification
+    scales
 Suggests: 
     knitr,
     rmarkdown

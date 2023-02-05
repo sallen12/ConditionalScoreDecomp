@@ -34,10 +34,11 @@
 #' decomposition proposed by Ferro and Fricker (2012), which is more appropriate
 #' for small sample sizes; \code{method = "isotonic"} performs the
 #' decomposition based on isotonic regression proposed by Dimitriadies et al. (2021).
-#' See references below.
+#' See references below. Note that the bias-corrected approach may return negative
+#' estimates of the three terms.
 #'
-#' Calculation of the unconditional Brier score decomposition (\code{bs_decomp})
-#' leverages the \pkg{SpecsVerification} and \pkg{reliabilitydiag} packages.
+#' Calculation of the Brier score decompositions using isotonic regression
+#' leverages the \pkg{reliabilitydiag} package.
 #'
 #' @return A named vector containing the decomposition terms.
 #'
@@ -95,6 +96,7 @@ bs_decomp <- function(o, p, bins = NULL, method = "bias-corrected") {
   if (method == "isotonic") {
     terms <- bs_decomp_iso(o, p)
   } else if (method %in% c("classical", "bias-corrected")) {
+
     if (is.null(bins)) {
       message("Taking bins to be the number of unique values of p")
       bins <- length(unique(p))
@@ -103,8 +105,38 @@ bs_decomp <- function(o, p, bins = NULL, method = "bias-corrected") {
                 Consider specifying 'bins' manually.")
       }
     }
-    terms <- SpecsVerification::BrierDecomp(p, o, bins, bias.corrected = (method == "bias-corrected"))
-    terms <- c(terms[1, c("UNC", "RES", "REL")], terms[1, "UNC"] - terms[1, "RES"] + terms[1, "REL"])
+
+    p_breaks <- seq(0, 1, length.out = bins + 1)
+    p_ind <- cut(p, breaks = p_breaks, include.lowest = TRUE, ordered_result = TRUE)
+    p_disc <- (p_breaks[-(bins + 1)] + p_breaks[-1])/2
+    p <- p_disc[p_ind]
+
+    forecasts <- unique(p)
+    obar <- mean(o)
+    N <- length(o)
+    n_k <- sapply(seq_along(forecasts), function(k) sum(p == forecasts[k]))
+    obar_k <- sapply(seq_along(forecasts), function(k) mean(o[p == forecasts[k]]))
+
+    unc <- obar*(1 - obar)
+    res <- sum((n_k/N)*((obar_k - obar)^2))
+    rel <- sum((n_k/N)*((forecasts - obar_k)^2))
+
+    if(method == "bias-corrected"){
+      if (any(n_k == 1)) {
+        warning("There is a forecast value that only occurs once. The bias-corrected
+                method cannot be used in this case. Returning estimates obtained without
+                bias-correction.")
+      } else {
+        bias1 <- obar*(1 - obar)/(N - 1)
+        bias2 <- sum(n_k*obar_k*(1 - obar_k)/(n_k - 1))/N
+        unc <- unc + bias1
+        res <- res + bias1 - bias2
+        rel <- rel - bias2
+      }
+    }
+
+    tot <- unc - res + rel
+    terms <- c(unc, res, rel, tot)
     names(terms) <- c("UNC", "RES", "REL", "TOT")
   } else {
     stop("method not recognised. It must be one of 'classical', 'bias-corrected',
@@ -145,6 +177,11 @@ bs_decomp_cond <- function(o, p, states, bins = NULL, method = "bias-corrected")
       }
     }
 
+    p_breaks <- seq(0, 1, length.out = bins + 1)
+    p_ind <- cut(p, breaks = p_breaks, include.lowest = TRUE, ordered_result = TRUE)
+    p_disc <- (p_breaks[-(bins + 1)] + p_breaks[-1])/2
+    p <- p_disc[p_ind]
+
     forecasts <- unique(p)
     obar <- mean(o)
 
@@ -166,28 +203,30 @@ bs_decomp_cond <- function(o, p, states, bins = NULL, method = "bias-corrected")
 
     if(method == "bias-corrected"){
       if (any(n_k == 1)) {
-        stop("There is a forecast value that only occurs once. The bias-corrected
-             method cannot be used in this case.")
+        warning("There is a forecast value that only occurs once. The bias-corrected
+                method cannot be used in this case. Returning estimates obtained without
+                bias-correction.")
       } else if (any(n_j == 1)) {
-        stop("There is a state that only occurs once. The bias-corrected
-             method cannot be used in this case.")
+        warning("There is a state that only occurs once. The bias-corrected
+                method cannot be used in this case. Returning estimates obtained without
+                bias-correction.")
       } else if (any(n_kj == 1)) {
-        stop("There is a forecast-state combination that only occurs once.
-             The bias-corrected method cannot be used in this case.")
+        warning("There is a forecast-state combination that only occurs once. The bias-corrected
+                method cannot be used in this case. Returning estimates obtained without
+                bias-correction.")
+      } else {
+        bias1 <- sum(n_j*obar_j*(1 - obar_j)/(n_j - 1))/N
+        bias2 <- obar*(1 - obar)/(N - 1)
+        bias3 <- sum(n_kj*obar_kj*(1 - obar_kj)/(n_kj - 1), na.rm = T)/N
+        bias4 <- sum(n_k*obar_k*(1 - obar_k)/(n_k - 1))/N
+
+        unc_A <- unc_A + bias1
+        res_A <- res_A - bias1 + bias2
+        res_fA <- res_fA + bias1 - bias3
+        res_Af <- res_Af - bias3 + bias4
+        rel_fA <- rel_fA - bias3
       }
-
-      bias1 <- sum(n_j*obar_j*(1 - obar_j)/(n_j - 1))/N
-      bias2 <- obar*(1 - obar)/(N - 1)
-      bias3 <- sum(n_kj*obar_kj*(1 - obar_kj)/(n_kj - 1), na.rm = T)/N
-      bias4 <- sum(n_k*obar_k*(1 - obar_k)/(n_k - 1))/N
-
-      unc_A <- unc_A + bias1
-      res_A <- res_A - bias1 + bias2
-      res_fA <- res_fA + bias1 - bias3
-      res_Af <- res_Af - bias3 + bias4
-      rel_fA <- rel_fA - bias3
     }
-
   } else {
     stop("method not recognised. It must be one of 'classical', 'bias-corrected',
          and 'isotonic'")
