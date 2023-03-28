@@ -1,0 +1,453 @@
+\documentclass[article,shortnames,nojss]{jss}
+
+%% -- LaTeX packages and custom commands ---------------------------------------
+
+%% packages
+\usepackage{thumbpdf,lmodern}
+\usepackage{amsfonts,amsmath,amssymb,amsthm}
+\usepackage{bbm,booktabs,setspace,longtable}
+\usepackage[T1]{fontenc}
+\allowdisplaybreaks
+
+%% custom commands
+\newcommand{\class}[1]{`\code{#1}'}
+\newcommand{\fct}[1]{\code{#1()}}
+
+\newcommand{\cA}{\mathcal{A}}
+\newcommand{\cF}{\mathcal{F}}
+\newcommand{\cL}{\mathcal{L}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\by}{\mathbf{y}}
+\newcommand{\bx}{\mathbf{x}}
+\newcommand{\bX}{\mathbf{X}}
+\newcommand{\ind}{\mathbbm{1}}
+\newcommand{\dd}{\hspace{0.1cm} \mathrm{d}}
+
+<<preliminaries, echo=FALSE, results='hide'>>=
+# Using knitr for manuscript
+library(knitr)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+render_sweave()
+opts_chunk$set(engine='R', tidy=FALSE)
+
+# JSS code formatting
+options(prompt = "R> ", continue = "+  ", width = 70, useFancyQuotes = FALSE)
+
+# Formatting
+options(scipen = 1, digits = 3)
+Sys.setenv(LANG = 'en')
+
+# RNG initialization
+set.seed(17)
+
+# Required packages
+library(ConditionalScoreDecomp)
+library(ggplot2)
+@
+
+
+%% -- Article metainformation (author, title, ...) -----------------------------
+
+\author{Sam Allen\\University of Bern\\Oeschger Centre for Climate Change Research}
+\Plainauthor{Sam Allen}
+
+\title{Decomposing proper scores into conditional uncertainty, resolution, and reliability terms}
+\Plaintitle{Decomposing proper scores into conditional uncertainty, resolution, and reliability terms}
+\Shorttitle{ConditionalScoreDecomp}
+
+\Abstract{
+  Probabilistic forecasts are often assessed and compared using proper scoring rules. While proper scoring rules return a single measure of forecast accuracy, it is well-known that the expected score can be decomposed into terms that quantify the uncertainty, resolution, and reliability of the forecasts. \cite{AllenEtAl2023} extend this by introducing decompositions of proper scores into uncertainty, resolution, and reliability components conditional on certain events, or states, having occurred. This vignette reproduces the results presented therein, and demonstrates how the conditional score decompositions can be implemented in practice for the Brier score.
+}
+
+\Keywords{probabilistic forecast evaluation, proper scoring rules, score decompositions, \proglang{R}}
+\Plainkeywords{probabilistic forecast evaluation, proper scoring rules, score decompositions, R}
+
+\Address{
+  Sam Allen\\
+  University of Bern\\
+  Institute of Mathematical Statistics and Actuarial Science\\
+  Alpeneggstrasse 22\\
+  3012 Bern, Switzerland\\
+  E-Mail: \email{sam.allen@unibe.ch}\\
+  \emph{and}\\
+  Oeschger Centre for Climate Change Research\\
+}
+
+
+\begin{document}
+%\SweaveOpts{concordance=TRUE}
+
+\section{Introduction}\label{sec:intro}
+
+Scoring rules are functions that take a probabilistic forecast $F$ and an observation $y$ as inputs, and output a real (possibly non-finite) value, or score. The score quantifies the distance between the forecast and the observation, and a lower score is therefore preferable.
+
+A scoring rule $S$ is said to be proper with respect to a class of probability distributions $\mathcal{F}$ if
+\begin{equation}
+    \E_{Y\sim G}  S(G, Y) \leq \E_{Y\sim G} S(F, Y),
+\end{equation}
+for all $F, G \in \mathcal{F}$, where $\E_{Y}$ denotes the expectation with respect to the random variable $Y$. $S$ is strictly proper with respect to $\mathcal{F}$ if the above inequality is strict.
+
+For concision, we write the expected score for the forecast $F$ as
+\begin{equation}
+    \bar{S}(F, G) := \E_{Y\sim G}  S(F, Y).
+\end{equation}
+The score entropy of a distribution $G \in \mathcal{F}$ is then defined as
+\begin{equation}
+    e(G) := \bar{S}(G, G),
+\end{equation}
+and the corresponding score divergence between two distributions $F, G \in \mathcal{F}$ as
+\begin{equation}
+    d(F, G) := \bar{S}(F, G) - \bar{S}(G, G).
+\end{equation}
+By definition, the score divergence is a non-negative function if it is generated from a scoring rule that is proper.
+
+While proper scoring rules return a single measure of the distance between the forecast and the observation, it is well-known that the expected score can be decomposed into terms that quantify the uncertainty, resolution, and reliability of the forecasts. In particular, we have that
+\begin{equation}\label{eq:broecker}
+     \E_{F,Y} S(F, Y) = \underbrace{e(G)}_{=\mathrm{UNC}_{Y}} - \underbrace{\E_{F} d(G, G_{F})}_{=\mathrm{RES}_{F}} + \underbrace{\E_{F} d(F, G_{F})}_{=\mathrm{REL}_{F}}
+\end{equation}
+where $G$ denotes the unconditional distribution of $Y$, and $G_{F}$ the conditional distribution of $Y$ given the forecast $F$ \citep{Broecker2009}. Note that both the outcome $Y$ and the forecast $F$ are treated as random variables in this case.
+
+The first term of the decomposition, $\mathrm{UNC}_{Y}$, expresses the inherent variability of the predictand, and is therefore referred to as the forecast \textit{uncertainty}. The second component, $\mathrm{RES}_{F}$, the forecast \textit{resolution}, is the expected divergence between the unconditional and conditional distributions of $Y$, thereby measuring the discrimination ability of the forecasts. Finally, the \textit{reliability} component, $\mathrm{REL}_{F}$, is the expected divergence between $F$ and $G_{F}$; a forecast is said to be reliable (or auto-calibrated) if $F = G_{F}$ almost surely, leading to $\mathrm{REL}_{F} = 0$, and the reliability term can therefore be interpreted as the extent to which the forecasts are miscalibrated, or unreliable. Since $\mathrm{RES}_{F}$ and $\mathrm{REL}_{F}$ are defined as expectations of score divergence, these terms will be non-negative whenever a proper scoring rule is used to evaluate the forecasts.
+
+However, it could be the case that a reliable forecast is miscalibrated conditional on certain events having occurred; the miscalibrations could cancel each other out, leading to the $\mathrm{REL}_{F}$ term being zero despite these conditional errors. To address this, \cite{AllenEtAl2023} introduce a conditional decomposition of proper scoring rules that assesses forecast performance conditionally on some auxiliary variable $A$. For example, $A$ could represent the occurrence of a particular season or weather regime, or could denote that forecast performance is being assessed at a particular location. The decomposition of the expected score into forecast uncertainty, resolution and reliability terms can easily be applied conditionally on $A$:
+\begin{equation}
+    \E_{F,Y|A}S(F, Y) = e(G_{A}) - \E_{F|A} d(G_{A}, G_{F, A}) + \E_{F|A} d(F, G_{F, A})
+\end{equation}
+where $G_{A}$ denotes the conditional distribution of $Y$ given $A$, and $G_{F, A}$ is the conditional distribution of $Y$ given both the forecast $F$ and the auxiliary variable $A$. By the tower law of conditional expectations, the total expected score is recovered by taking the expectation with respect to $A$:
+\begin{equation}
+    \E_{F,Y}S(F, Y) = \underbrace{\E_{A}e(G_{A})}_{=\mathrm{UNC}_{Y|A}} - \underbrace{\E_{A} \E_{F|A} d(G_{A}, G_{F, A})}_{=\mathrm{RES}_{F|A}} + \underbrace{\E_{A} \E_{F|A} d(F, G_{F, A})}_{=\mathrm{REL}_{F|A}}.
+\end{equation}
+The terms $\mathrm{UNC}_{Y|A}$, $\mathrm{RES}_{F|A}$, and $\mathrm{REL}_{F|A}$ represent the expected uncertainty, resolution, and reliability given the auxiliary variable $A$.
+
+This constitutes a second, distinct decomposition of the expected score into uncertainty, resolution, and reliability components, where the terms depend on $A$. Although these terms are not equivalent to those in Equation \ref{eq:broecker}, \cite{AllenEtAl2023} demonstrate that an alternative representation of the expected score exists that amalgamates the two decompositions, thereby possessing the benefits of both:
+\begin{equation}\label{eq:new}
+    \E_{F,Y}S(F, Y) = \{ \mathrm{UNC}_{Y|A} + \mathrm{RES}_{A} \} - \{ \mathrm{RES}_{A} + \mathrm{RES}_{F|A} -  \mathrm{RES}_{A|F} \} + \{ \mathrm{REL}_{F|A} - \mathrm{RES}_{A|F} \}.
+\end{equation}
+The first, second and third sets of curly braces are equivalent, respectively, to the uncertainty, resolution and reliability components in Equation \ref{eq:broecker}.
+
+This extended decomposition contains two terms, $\mathrm{RES}_{A}$ and $\mathrm{RES}_{A|F}$, that are both added and subtracted from the decomposition, and therefore have no effect on the overall score:
+\begin{equation}
+\begin{split}
+    \mathrm{RES}_{A} & := \E_{A}d(G, G_{A}), \\
+    \mathrm{RES}_{A|F} & := \E_{F,A}d(G_{F}, G_{F, A}). \\
+\end{split}
+\end{equation}
+Although these extra terms contribute nothing to the expected score, they are themselves useful, in that they convey supplementary information to the forecaster regarding the behaviour of the forecasts and observations conditional on the chosen states: $\mathrm{RES}_{A}$ is the expected divergence between the unconditional distribution of $Y$ and the conditional distribution of $Y$ given $A$, and it therefore measures the amount of information contained in the variable $A$; similarly, $\mathrm{RES}_{A|F}$ is the expected divergence between the conditional distribution of $Y$ given $F$ and the conditional distribution of $Y$ given both $F$ and $A$, thereby quantifying the additional information contained in the variable $A$ that is not already present in the forecast.
+
+Having re-introduced these decompositions, the goal of this vignette is to demonstrate how the accompanying \proglang{R} package allows users to implement the decompositions in practical applications. We then discuss some potential extensions to the existing functionality that should be explored in the future.
+
+
+\section{Brier score}\label{sec:brier}
+
+Score decompositions have been studied in most detail using the Brier score. Hence, the package currently only contains functionality to decompose the Brier score into conditional uncertainty, resolution, and reliability terms. Nonetheless, it should be straightforward to apply the conditional decomposition to other scoring rules for binary outcomes, such as the logarithmic score, which could be added to the package in the future.
+
+The Brier score is defined as the squared difference between a probability forecast $p \in [0, 1]$ and the corresponding binary outcome $ y \in \{0, 1\} $:
+\begin{equation}
+    \mathrm{BS}(p, y) = (p - y)^{2}.
+\end{equation}
+
+Given a sample of $n$ forecasts $p_{1}, \dots, p_{n}$ and corresponding observations $y_{1}, \dots, y_{n}$, forecasters are typically assessed using their average score
+\begin{equation}
+    \frac{1}{n} \sum_{i=1}^{n} (p_{i} - y_{i})^{2}.
+\end{equation}
+Of course, this is an unbiased estimator for the expected score $\E_{p,Y}\mathrm{BS}(p, Y)$.
+
+\subsection{Sample estimators for the decomposition terms}
+
+For simplicity, assume that the forecast $p$ can only take one of a finite number of values, $p \in \{ P_{1},...,P_{K} \}$. \cite{Murphy1973} showed that in such circumstances, the average Brier score over $ n $ forecast instances can be divided into three components:
+\begin{equation}
+    \frac{1}{n}\sum_{i=1}^{n} (p_{i} - y_{i})^{2} = \widehat{\mathrm{UNC}}_{Y} - \widehat{\mathrm{RES}}_{F} + \widehat{\mathrm{REL}}_{F},
+\end{equation}
+where
+\begin{equation}
+\begin{split}
+    \widehat{\mathrm{UNC}}_{Y} &= \bar{y}(1 - \bar{y}), \\
+    \widehat{\mathrm{RES}}_{F} &= \sum_{k=1}^{K} \frac{n_{k \bullet}}{n} ( \bar{y}_{k \bullet} - \bar{y} ) ^{2}, \\
+    \widehat{\mathrm{REL}}_{F} & = \sum_{k=1}^{K} \frac{n_{k \bullet}}{n} ( P_{k} - \bar{y}_{k \bullet} ) ^{2}. \\
+\end{split}
+\end{equation}
+Here, we define $\bar{y} = \sum_{i=1}^{n} y_{i}/n$, and $\bar{y}_{k \bullet} = \sum_{I_{k \bullet}} y_{i}/n_{k \bullet}$, with $I_{k \bullet} = \{i : p_{i} = P_{k} \}$ the set of all instances where $P_{k}$ was issued as the forecast, and $n_{k \bullet} = |I_{k \bullet}|$ the number of such instances.
+
+The terms $\widehat{\mathrm{UNC}}_{Y}$, $\widehat{\mathrm{RES}}_{F}$, and $\widehat{\mathrm{REL}}_{F}$ provide sample estimators for the forecast uncertainty, resolution, and reliability. However, although the mean score is an unbiased estimator for the expected score, $\widehat{\mathrm{UNC}}_{Y}$, $\widehat{\mathrm{RES}}_{F}$, and $\widehat{\mathrm{REL}}_{F}$ are generally biased estimators for the corresponding population terms $\mathrm{UNC}_{Y}$, $\mathrm{RES}_{F}$, and $\mathrm{REL}_{F}$ \citep{Broecker2012}.
+
+To address this, \cite{FerroFricker2012} introduced bias corrections to the above sample estimators:
+\begin{equation}
+\begin{split}
+    \widetilde{\mathrm{UNC}}_{Y} & = \widehat{\mathrm{UNC}}_{Y} + \frac{\bar{y}(1 - \bar{y})}{n - 1} , \\
+    \widetilde{\mathrm{RES}}_{F} & = \widehat{\mathrm{RES}}_{F} + \frac{\bar{y}(1 - \bar{y})}{n - 1}  - \frac{1}{n} \sum_{k=1}^{K} \frac{n_{k \bullet}}{n_{k \bullet} - 1} \bar{y}_{k \bullet}(1 - \bar{y}_{k \bullet}), \\
+    \widetilde{\mathrm{REL}}_{F} & = \widehat{\mathrm{REL}}_{F} - \frac{1}{n} \sum_{k=1}^{K} \frac{n_{k \bullet}}{n_{k \bullet} - 1} \bar{y}_{k \bullet}(1 - \bar{y}_{k \bullet}),
+\end{split}
+\end{equation}
+where it is assumed that $n_{k \bullet} \neq 1$ for all $k = 1, \dots, K$. The $\widetilde{\mathrm{UNC}}_{Y}$ term is an unbiased estimator for $\mathrm{UNC}_{Y}$, whereas $\widetilde{\mathrm{REL}}_{F}$ and $\widetilde{\mathrm{RES}}_{F}$ remain biased, but with a bias that decays at a much faster rate than that of $\widehat{\mathrm{REL}}_{F}$ and $\widehat{\mathrm{RES}}_{F}$. Note, however, that these bias corrections result in estimators for $\mathrm{RES}_{F}$ and $\mathrm{REL}_{F}$ that may be negative.
+
+Finally, \cite{DimitriadisEtAl2021} proposed an approach to estimate the score decomposition terms using isotonic regression:
+\begin{equation}\label{eq:dimitriadis}
+\begin{split}
+    \mathrm{UNC}^{*}_{Y} & = \frac{1}{n} \sum_{i=1}^{n} (\bar{y} - y_{i})^{2}, \\
+    \mathrm{RES}^{*}_{F} & = \frac{1}{n} \sum_{i=1}^{n} (\bar{y} - y_{i})^{2} - \frac{1}{n} \sum_{i=1}^{n} (p^{*}_{i} - y_{i})^{2}, \\
+    \mathrm{REL}^{*}_{F} & = \frac{1}{n} \sum_{i=1}^{n} (p_{i} - y_{i})^{2} - \frac{1}{n} \sum_{i=1}^{n} (p^{*}_{i} - y_{i})^{2},
+\end{split}
+\end{equation}
+where $p^{*}_{1}, \dots, p^{*}_{n}$ are probability forecasts obtained by applying an isotonic regression-based re-calibration scheme to $p_{1}, \dots, p_{n}$. These forecasts are reliable by construction (in sample), and contain the same information as the original forecasts; the reliability of the original forecasts is thus estimated by considering the score difference between these forecasts and the re-calibrated forecasts.
+
+It is clear that the average Brier score is recovered by combining these estimators, and this approach can readily be implemented with any other scoring rule for binary outcomes. In contrast to the two approaches described beforehand, this does not require the assumption that the forecast can only take one of a finite number of values, and is guaranteed to yield non-negative estimators for all components. We therefore generally advocate the use of this approach in practice.
+
+
+\subsection{Sample estimators for the conditional decomposition terms}
+
+Similar sample estimators can also be obtained for the conditional decomposition terms of Equation \ref{eq:new}. In this case, we assume that we have access to the values $a_{1}, \dots, a_{n}$ of the auxiliary variable corresponding to the forecasts and observations introduced above, and we additionally assume that there are only a finite number of possible values, i.e. $a_{i} \in \{ A_{1},...,A_{J} \}$ for $i =1, \dots, n$. In the following, we refer to these possible values of $A$ as \textit{states}.
+
+As before, we let $I_{\bullet j} = \{i : a_{i} = A_{j} \}$ denote the set of all instances where state $A_{j}$ occurred, and let $I_{k j} = \{i : p_{i} = P_{k}, a_{i} = A_{j} \}$ denote the set of instances where $P_{k}$ was issued as the forecast and state $A_{j}$ occurred, with $ n_{\bullet j} = |I_{\bullet j}| $ and $ n_{k j} = |I_{k j}| $ the number of instances in these sets. We then define $\bar{y}_{\bullet j} = \sum_{I_{\bullet j}} y_{i}/n_{\bullet j}$ and $\bar{y}_{k j} = \sum_{I_{k j}} y_{i}/n_{k j}$.
+
+Using this, the average Brier score can be decomposed into
+\begin{equation}
+    \frac{1}{n}\sum_{i=1}^{n} (p_{i} - y_{i})^{2} = \left\{ \widehat{\mathrm{UNC}}_{Y|A} + \widehat{\mathrm{RES}}_{A} \right\} - \left\{ \widehat{\mathrm{RES}}_{A} + \widehat{\mathrm{RES}}_{F|A} - \widehat{\mathrm{RES}}_{A|F} \right\} + \left\{ \widehat{\mathrm{REL}}_{F|A} - \widehat{\mathrm{RES}}_{A|F} \right\},
+\end{equation}
+where
+\begin{equation}
+\begin{split}
+    \widehat{\mathrm{UNC}}_{Y|A} & = \sum_{j=1}^{J} \frac{n_{\bullet j}}{n} \bar{y}_{\bullet j}(1 - \bar{y}_{\bullet j}), \\
+    \widehat{\mathrm{RES}}_{A} & = \sum_{j=1}^{J} \frac{n_{\bullet j}}{n} ( \bar{y}_{\bullet j} - \bar{y} ) ^{2}, \\
+    \widehat{\mathrm{RES}}_{F|A} & = \sum_{j,k=1}^{J,K} \frac{n_{kj}}{n} ( \bar{y}_{\bullet j} - \bar{y}_{kj} ) ^{2}, \\
+    \widehat{\mathrm{RES}}_{A|F} & = \sum_{j,k=1}^{J,K}  \frac{n_{kj}}{n} ( \bar{y}_{k \bullet} - \bar{y}_{kj} ) ^{2}, \\
+    \widehat{\mathrm{REL}}_{F|A} & = \sum_{j,k=1}^{J,K} \frac{n_{kj}}{n} ( P_{k} - \bar{y}_{kj} ) ^{2}.
+\end{split}
+\end{equation}
+
+Bias corrections to these estimators can be derived in a similar vein to before:
+\begin{equation}
+\begin{split}
+    \widetilde{\mathrm{UNC}}_{Y|A} & = \widehat{\mathrm{UNC}}_{Y|A} + \frac{1}{n} \sum_{j=1}^{J} \frac{n_{\bullet j}}{n_{\bullet j} - 1} \bar{y}_{\bullet j}(1 - \bar{y}_{\bullet j}), \\
+    \widetilde{\mathrm{RES}}_{A} & = \widehat{\mathrm{RES}}_{A} + \frac{\bar{y}(1 - \bar{y})}{n - 1}  - \frac{1}{n} \sum_{j=1}^{J} \frac{n_{\bullet j}}{n_{\bullet j} - 1} \bar{y}_{\bullet j}(1 - \bar{y}_{\bullet j}), \\
+    \widetilde{\mathrm{RES}}_{F|A} & = \widehat{\mathrm{RES}}_{F|A} + \frac{1}{n} \sum_{j=1}^{J} \frac{n_{\bullet j}}{n_{\bullet j} - 1} \bar{y}_{\bullet j}(1 - \bar{y}_{\bullet j}) - \frac{1}{n} \sum_{j,k=1}^{J,K}
+    \frac{n_{kj}}{n_{kj} - 1} \bar{y}_{kj}(1 - \bar{y}_{kj}), \\
+    \widetilde{\mathrm{RES}}_{A|F} & = \widehat{\mathrm{RES}}_{A|F} - \frac{1}{n} \sum_{j,k=1}^{J,K} \frac{n_{kj}}{n_{kj} - 1} \bar{y}_{kj}(1 - \bar{y}_{kj}) + \frac{1}{n} \sum_{k=1}^{K}
+    \frac{n_{k \bullet}}{n_{k \bullet} - 1} \bar{y}_{k \bullet}(1 - \bar{y}_{k \bullet}), \\
+    \widetilde{\mathrm{REL}}_{F|A} & = \widehat{\mathrm{REL}}_{F|A} - \frac{1}{n} \sum_{j,k=1}^{J,K} \frac{n_{kj}}{n_{kj} - 1} \bar{y}_{kj}(1 - \bar{y}_{kj}),
+\end{split}
+\end{equation}
+where it is similarly assumed that $n_{k \bullet}, n_{\bullet j}, n_{kj} \neq 1$ for all $k = 1, \dots, K$, $j = 1, \dots, J$. As for the bias corrections for the classical decomposition terms, the biases of these terms are not zero, but they decay to zero at a faster rate than the biases of the uncorrected estimators.
+
+Finally, the isotonic regression-based approach proposed by \cite{DimitriadisEtAl2021} can be leveraged to construct estimators for the conditional decomposition terms. This can be achieved by extending the general framework to construct score decompositions discussed by \cite{Siegert2017}, among others. If $r_{1}, \dots, r_{n}$ represent uninformative reference forecasts, and $q_{1}, \dots, q_{n}$ represent re-calibrated versions of the original forecasts $p_{1}, \dots, p_{n}$, then the average score for these original forecasts can be written as
+\begin{equation}
+    \left\{ \frac{1}{n} \sum_{i=1}^{n} S(r_{i}, y_{i}) \right\} - \left\{ \frac{1}{n} \sum_{i=1}^{n} S(r_{i}, y_{i}) - \frac{1}{n} \sum_{i=1}^{n} S(q_{i}, y_{i}) \right\} + \left\{ \frac{1}{n} \sum_{i=1}^{n} S(p_{i}, y_{i}) - \frac{1}{n} \sum_{i=1}^{n} S(q_{i}, y_{i}) \right\}.
+\end{equation}
+The terms in square brackets represent estimators for the uncertainty, resolution, and reliability components of the expected score, respectively. The canonical choice for the reference forecasts is the unconditional observed mean, i.e. $r_{i} = \bar{y}$ for $i= 1, \dots, n$, while \cite{DimitriadisEtAl2021} argue that isotonic regression provides a canonical re-calibration scheme when the outcomes are binary. This leads to the estimators presented in Equation \ref{eq:dimitriadis}.
+
+A similar, general decomposition can be constructed in the conditional case. In particular, let $r^{A}_{1}, \dots, r^{A}_{n}$ represent forecasts that are uninformative given the auxiliary information $A$, and let $q^{A}_{1}, \dots, q^{A}_{n}$ be conditionally re-calibrated versions of the original forecasts. Then, we can estimate the terms of the conditional decomposition using
+\begin{equation}\label{eq:cond_siegert}
+\begin{split}
+    \mathrm{UNC}^{*}_{Y|A} & = \frac{1}{n} \sum_{i=1}^{n} S(r^{A}_{i}, y_{i}), \\
+    \mathrm{RES}^{*}_{A} & = \frac{1}{n} \sum_{i=1}^{n} S(r_{i}, y_{i}) - \frac{1}{n} \sum_{i=1}^{n} S(r^{A}_{i}, y_{i}), \\
+    \mathrm{RES}^{*}_{F|A} & = \frac{1}{n} \sum_{i=1}^{n} S(r^{A}_{i}, y_{i}) - \frac{1}{n} \sum_{i=1}^{n} S(q^{A}_{i}, y_{i}), \\
+    \mathrm{RES}^{*}_{A|F} & = \frac{1}{n} \sum_{i=1}^{n} S(q_{i}, y_{i}) - \frac{1}{n} \sum_{i=1}^{n} S(q^{A}_{i}, y_{i}), \\
+    \mathrm{REL}^{*}_{F|A} & = \frac{1}{n} \sum_{i=1}^{n} S(p_{i}, y_{i}) - \frac{1}{n} \sum_{i=1}^{n} S(q^{A}_{i}, y_{i}).
+\end{split}
+\end{equation}
+As before, the conditional reference forecasts could be the conditional means corresponding to each event $\bar{y}_{\bullet j}$, while the conditionally re-calibrated forecasts could be obtained by fitting separate re-calibration schemes to the forecasts in each state. In the binary case, for example, this could be achieved by fitting separate isotonic regression models to the forecasts in each state, or by using $A$ as a predictor in the model; this latter approach would additionally permit the decomposition to be constructed when $A$ represents some continuous information, rather than a discrete event. Of course, estimators for the conditional Brier score decomposition terms are obtained by choosing $S$ to be the Brier score.
+
+
+\section{Application}\label{sec:application}
+
+\subsection{Data}
+
+In this section, we demonstrate how the accompanying package allows these conditional decompositions to be applied in practice. We do so by reproducing the results presented in \cite{AllenEtAl2023}, wherein the Brier score is used to evaluate forecast probabilities that the daily maximum temperature will exceed a chosen threshold. Forecasts are available from MeteoSwiss's COSMO-E ensemble prediction system at 146 synoptic weather stations across Switzerland, for the three summer months (JJA) between 2018 and 2020. The forecasts considered here have been issued three days in advance. The COSMO-E prediction system generates ensemble forecasts comprised of $M = 21$ members for the daily maximum temperature, and a probability that the temperature will exceed a chosen threshold is then extracted from the ensemble by considering the proportion of ensemble members that exceed the threshold. This results in 22 (i.e. $M + 1$) evenly spaced possible forecast values.
+
+The COSMO-E forecasts are evaluated using the mean Brier score over all forecast cases, with daily maximum temperature measurements at the sites of interest used to verify the forecasts. The classical decomposition of the mean Brier score is used to assess the resolution and reliability of the forecasts, while the conditional decomposition is employed to calculate these terms conditionally on a set of states. For concision, we restrict attention here to one set of states, corresponding to a grouping of the stations based on their altitude. That is, each forecast-observation pair is assigned to a state depending on the altitude of the station at which the forecast was issued: five groups are considered (i.e. $J = 5$), which correspond to whether the station altitude is lower than 500m, between 500m and 1000m, 1000m and 1500m, 1500m and 2000m, or above 2000m.
+
+The COSMO-E ensemble prediction system is compared to four alternative forecast strategies: a climatological forecast, which is constant and equal to the relative frequency that the (out-of-sample) observations exceed the threshold of interest; a conditional climatological forecast that calculates this relative frequency for each state separately, and then issues the probability corresponding to the prevailing state as the forecast; a post-processing approach that uses logistic regression to re-calibrate the COSMO-E forecast; and an altitude-dependent post-processing model that fits a separate logistic regression model corresponding to each of the five states, and re-calibrates the COSMO-E forecasts depending on the prevailing state.
+
+Note that the exact data used in \cite{AllenEtAl2023} is owned by MeteoSwiss and therefore not publicly available. To circumvent this, random noise has been added to the data. The results that we obtain here are therefore not identical to those presented in \cite{AllenEtAl2023}, though the implementation of the conditional Brier score decompositions is the same. This noisy data is available in this package, and can be accessed using
+
+<<load_noisy_data>>=
+data("noisy_data", package = "ConditionalScoreDecomp")
+@
+
+The result is a data frame containing the observation \code{Obs}, equal to zero or one depending on whether the observed temperature exceeds the threshold of interest; forecast probabilities for the COSMO-E (\code{Ens}), climatological (\code{Clim}), conditional climatological (\code{CondClim}), post-processed (\code{PP}), and conditional post-processed (\code{CondPP}) forecast strategies; the corresponding state \code{state}, with 1 denoting that the forecast was issued at a station with an altitude smaller than 500m, and 5 corresponding to a station with altitude greater than 2000m; and the temperature threshold \code{th}, ranging from 5 to 30, for which the observation and forecast probabilities were calculated.
+
+
+\subsection{Results}
+
+Firstly, consider a threshold of 20 degrees Celsius.
+<<subset_noisy_data>>=
+dat20 <- subset(noisy_data, th == 20)
+@
+
+We can calculate the classical Brier score decomposition using the \code{bs_decomp()} function
+\begin{Code}
+bs_decomp(o, p, bins = NULL, method = "isotonic")
+\end{Code}
+This function takes a vector of binary outcomes \code{o} and a vector of corresponding probability forecasts \code{p} and outputs a vector containing the forecast uncertainty, resolution, and reliability, as well as the total Brier score. The \code{bins} argument is an integer that specifies how many bins the forecasts should be grouped into; if \code{bins = NULL} (the default), then it is assumed that \code{p} has already been binned. The decomposition can be performed using the three different estimators discussed in the previous section: \code{method = "classical"} returns the uncorrected decomposition introduced by \cite{Murphy1973}, \code{method = "bias-corrected"} returns \cite{FerroFricker2012}'s bias corrected terms, while \code{method = "isotonic"} employs isotonic regression to estimate the components, as in \cite{DimitriadisEtAl2021}. Any other choice for \code{method} returns an error, and this is also the case if the observations are not binary, or if a probability forecast is specified that is not between zero and one.
+
+We can apply this function to the probabilities issued by each of the five forecast strategies.
+<<decompostition_terms>>=
+o <- dat20$Obs
+bs_mat <- rbind(Clim = bs_decomp(o = o, p = dat20$Clim),
+                CondClim = bs_decomp(o = o, p = dat20$CondClim),
+                Ens = bs_decomp(o = o, p = dat20$Ens),
+                PP = bs_decomp(o = o, p = dat20$PP),
+                CondPP = bs_decomp(o = o, p = dat20$CondPP))
+print(bs_mat*1e4)
+@
+Note that these decompositions have been calculated using the isotonic regression-based terms (the default in \code{bs_decomp()}), which is in contrast to \cite{AllenEtAl2023}, where the bias corrected estimators were employed.
+
+We can similarly calculate the conditional decomposition terms using the \code{bs_decomp_cond()} function
+\begin{Code}
+bs_decomp_cond(o, p, states, bins = NULL, method = "isotonic")
+\end{Code}
+This differs from \code{bs_decomp()} only in that it includes an additional argument \code{states}, which contains a vector of the states on which to condition the decomposition.
+
+Applying this to the five forecast strategies considered here gives
+<<conditional_decomposition_terms>>=
+state <- dat20$state
+bs_mat_c <- rbind(Clim = bs_decomp_cond(o, dat20$Clim, state),
+                  CondClim = bs_decomp_cond(o, dat20$CondClim, state),
+                  Ens = bs_decomp_cond(o, dat20$Ens, state),
+                  PP = bs_decomp_cond(o, dat20$PP, state),
+                  CondPP = bs_decomp_cond(o, dat20$CondPP, state))
+print(bs_mat_c*1e4)
+@
+These terms mirror the results presented in Figure 4 of \cite{AllenEtAl2023}.
+
+This information can be visualised more succinctly using the \code{plot_decomp()} function.
+\begin{Code}
+plot_decomp(terms_un = NULL, terms_cnd = NULL,
+            title = "", waterfall = FALSE, dec_places = 1)
+\end{Code}
+This function takes a vector \code{terms_un} containing the unconditional decomposition terms, and a vector \code{terms_cnd} containing the conditional decomposition terms, and plots the results either using a bar plot (the default, as in Figures 2-4 of \cite{AllenEtAl2023}) or a waterfall plot (\code{waterfall = TRUE}). A custom title to the plot can be chosen using \code{title}, while the \code{dec_places} argument allows the user to specify how many decimal places should be displayed.
+
+If one of \code{terms_un} and \code{terms_cnd} is not specified, then the function returns a plot containing only the decomposition terms that have been given. Otherwise, the two decompositions are displayed alongside each other. Of course, an error is returned if neither argument is specified.
+
+As an example, consider the COSMO-E ensemble forecasts at a threshold of 20 degrees. Figure \ref{fig:barplot} displays a bar plot containing both the unconditional and conditional decomposition terms for the COSMO-E forecasts, while Figure \ref{fig:waterfallplot} displays the same information in a waterfall plot. Of course, it is straightforward to obtain analogous plots corresponding to the other forecasting methods.
+
+\begin{figure}
+<<plot_illustration_bar, dev='pdf', fig.width=10.4, fig.height=3.5, fig.align="center", out.width = "\\linewidth">>=
+plot_decomp(terms_un = bs_mat["Ens", ]*1e4,
+            terms_cnd = bs_mat_c["Ens", ]*1e4, title = "COSMO-E")
+@
+\caption{Bar plot containing the unconditional and conditional decomposition terms for the COSMO-E forecasts.}
+\label{fig:barplot}
+\end{figure}
+
+\begin{figure}
+<<plot_illustration_waterfall, dev='pdf', fig.width=10.4, fig.height=3.5, fig.align="center", out.width = "\\linewidth">>=
+plot_decomp(terms_un = bs_mat["Ens", ]*1e4,
+            terms_cnd = bs_mat_c["Ens", ]*1e4,
+            title = "COSMO-E", waterfall = T)
+@
+\caption{Waterfall plot containing the unconditional and conditional decomposition terms for the COSMO-E forecasts.}
+\label{fig:waterfallplot}
+\end{figure}
+
+The results presented thus far have been specific for forecasts issued for whether the daily maximum temperature will exceed 20 degrees celcius. It is straightforward to calculate the decomposition terms corresponding to other thresholds using the same approach. Figure \ref{fig:thresholdplot} displays the unconditional and conditional decomposition terms as a function of the daily maximum temperature threshold, as in Figure 6 of \cite{AllenEtAl2023}. Again, we illustrate this here using the COSMO-E forecasts.
+
+\begin{figure}
+<<plot_vs_threshold, echo = FALSE, dev='pdf', fig.width=10.4, fig.height=3.5, fig.align="center", out.width = "\\linewidth">>=
+thresholds <- 5:30
+terms_un <- sapply(thresholds, function(t){
+  datt <- subset(noisy_data, th == t)
+  bs_decomp(o = datt$Obs, p = datt$Ens)
+})
+terms_cnd <- sapply(thresholds, function(t){
+  datt <- subset(noisy_data, th == t)
+  bs_decomp_cond(o = datt$Obs, p = datt$Ens, states = datt$state)
+})
+
+df <- data.frame(x = as.vector(terms_un)*1e4,  t = rep(thresholds, each = 4),
+                     y = rep(c("UNC", "RES", "REL", " Tot"), length(thresholds)))
+plot_un <- ggplot(df) + geom_line(aes(x = t, y = x, col = y), size = 1) +
+  geom_hline(aes(yintercept = 0), lty = "dotted") +
+  scale_x_continuous(name = "Threshold (C)") +
+  scale_y_continuous(name = "", limits = c(0, 2500)) +
+  scale_color_manual(values = c("black", "#619CFF", "#00BA38", "#F8766D"),
+                     labels = c("Tot", expression(REL[F]), expression(RES[F]), expression(UNC[Y]))) +
+  theme_bw() + theme(legend.title = element_blank(), legend.position = "bottom")
+
+
+df <- data.frame(x = as.vector(terms_cnd)*1e4,  t = rep(thresholds, each = 6),
+                 y = rep(c("UNC_Y|A", "RES_A", "RES_F|A", "RES_A|F", "REL_F|A", " Tot"),
+                         length(thresholds)))
+plot_cnd <- ggplot(df) + geom_line(aes(x = t, y = x, col = y), size = 1) +
+  geom_hline(aes(yintercept = 0), lty = "dotted") +
+  scale_x_continuous(name = "Threshold (C)") +
+  scale_y_continuous(name = "", limits = c(0, 2500)) +
+  scale_color_manual(values = c("black", "#D39200", "#00C19F", "#DB72FB", "#93AA00", "#00B9E3"),
+                     labels = c("Tot      ", expression(REL["F|A"]), expression(RES[A  ]),
+                                expression(RES["A|F"]), expression(RES["F|A"]), expression(UNC["Y|A"]))) +
+  theme_bw() + theme(legend.title = element_blank(), legend.position = "bottom")
+
+gridExtra::grid.arrange(plot_un, plot_cnd, nrow = 1)
+@
+\caption{Terms of the unconditional decomposition (left) and the conditional decomposition (right) for the COSMO-E ensemble forecasts, as a function of the temperature threshold.}
+\label{fig:thresholdplot}
+\end{figure}
+
+Finally, as discussed in \cite{AllenEtAl2023}, an optimal re-calibration scheme should remove the miscalibration in the COSMO-E output, without sacrificing the information contained in these forecasts. The relative improvement gained by such a re-calibration scheme is therefore equal to the reliability component, $\mathrm{RES}_{F}$, of the COSMO-E forecasts, divided by the total score. To assess the efficiency of the post-processing method, we can compare this theoretical improvement to the actual improvement gained by post-processing. Figure \ref{fig:improvementplot} shows the relative improvement (which corresponds to a Brier skill score) obtained by the logistic regression-based post-processing model, as a function of the threshold. The improvements gained by post-processing are typically below the theoretical improvements associated with an optimal re-calibration scheme, suggesting the chosen post-processing model is not the most effective approach, particularly for smaller thresholds.
+
+\begin{figure}
+<<improvements, echo = FALSE, dev='pdf', fig.width=10.4, fig.height=3.5, fig.align="center", out.width = "\\linewidth">>=
+
+ss_CI <- sapply(thresholds, function(t) {
+  datt <- subset(noisy_data, th == t)
+
+  # ss
+  s_ens <- (datt$Ens - datt$Obs)^2
+  s_pp <- (datt$PP - datt$Obs)^2
+  s_cpp <- (datt$CondPP - datt$Obs)^2
+
+  ss <- 1 - mean(s_pp)/mean(s_ens)
+  ss_cond <- 1 - mean(s_cpp)/mean(s_pp)
+
+  # rel
+  impr <- bs_decomp(datt$Obs, datt$Ens)
+  impr <- unname(impr["REL"]/impr["TOT"])
+  impr_cond <- bs_decomp_cond(datt$Obs, datt$PP, datt$state)
+  impr_cond <- unname(impr_cond["RES_A|F"]/impr_cond["TOT"])
+
+  return(c(ss, impr, ss_cond, impr_cond))
+})
+
+df <- data.frame(t = thresholds,
+                 x = c(ss_CI[1, ], ss_CI[2, ]),
+                 mth = rep(c("Actual", "Theoretical"), each = length(thresholds)))
+plot_un <- ggplot(df) + geom_line(aes(x = t, y = x, col = mth), size = 1) +
+  geom_hline(aes(yintercept = 0), lty = "dotted") +
+  scale_x_continuous(name = "Threshold (C)") +
+  scale_y_continuous(name = "Brier skill score", limits = c(-0.05, 0.35)) +
+  theme_bw() + theme(legend.title = element_blank(), legend.position = "bottom") +
+  guides(fill = "none")
+
+df <- data.frame(t = thresholds,
+                   x = c(ss_CI[3, ], ss_CI[4, ]),
+                   mth = rep(c("Actual", "Theoretical"), each = length(thresholds)))
+plot_cnd <- ggplot(df) + geom_line(aes(x = t, y = x, col = mth), size = 1) +
+  geom_hline(aes(yintercept = 0), lty = "dotted") +
+  scale_x_continuous(name = "Threshold (C)") +
+  scale_y_continuous(name = "Brier skill score", limits = c(-0.05, 0.35)) +
+  theme_bw() + theme(legend.title = element_blank(), legend.position = "bottom") +
+  guides(fill = "none")
+
+gridExtra::grid.arrange(plot_un, plot_cnd, nrow = 1)
+@
+\caption{The theoretical relative improvement in the Brier score gained by statistically post-processing the COSMO-E probability forecasts, and the actual relative improvement gained in practice by the logistic regression model, shown as a function of the temperature threshold (left). And the theoretical and materialised relative improvement in the Brier score gained by incorporating altitude information into the statistical post-processing model, as a function of the temperature threshold (right).}
+\label{fig:improvementplot}
+\end{figure}
+
+Similarly, the ratio of $\mathrm{RES}_{A|F}$ to the total score provides us with a theoretical measure of the improvement gained by incorporating the state information into the post-processing model. This can also be plotted against the actual improvements, as quantified by the Brier skill score of the conditionally post-processed forecasts with the standard post-processed forecasts as reference. If the actual improvements coincide with the theoretical improvements, then it suggests the state information is efficiently captured within the conditional post-processing model; conversely, a large difference between the theoretical and actual improvements indicates that this information is not optimally included in the model. Figure \ref{fig:improvementplot} illustrates that this information is well-captured for smaller thresholds, despite the model's simplicity, but not for intermediate thresholds.
+
+
+\section{Discussion}\label{sec:discussion}
+
+This vignette describes the conditional decompositions of proper scores proposed by \cite{AllenEtAl2023}, and reproduces the results therein. This package is still in development, and there are several possible extensions that could be made. From an implementation standpoint, the \code{plot_decomp()} function is not robust to the plot window and scale of the variables, and can therefore lead to some values of the decomposition being unreadable.
+
+There are also several theoretical extensions that could be included within the package. Firstly, the package currently only contains functionality to apply the conditional decomposition to the Brier score. However, as discussed in Section \ref{sec:brier}, estimators of the conditional decomposition terms can readily be obtained for any proper scoring rule for binary outcomes, via Equation \ref{eq:cond_siegert}. Alternative scoring rules, e.g. the logarithmic score, could therefore easily be added.
+
+Moreover, this general framework also applies to forecasts made for outcomes defined on more complex spaces. For example, for real-valued outcomes, the framework can be applied using the continuous ranked probability score (CRPS). However, in this case, there is currently no canonical approach with which to generate re-calibrated forecasts $q$. Work is ongoing to achieve this using isotonic distributional regression \citep{HenziEtAl2021}, which additionally leads to non-negativity results for the resolution and reliability components.
+
+Finally, the conditional decomposition can also be employed with more than one auxiliary variable, as discussed in \cite{AllenEtAl2023}. It is generally difficult to reliably estimate the terms of this decomposition using the classical and bias corrected estimators --- especially when the sample size is small, or the number of possible states is large --- though the isotonic regression-based approach can handle this relatively easily. While the package can currently only handle single, discrete choices of the auxiliary variable, it should be straightforward to extend the package to deal with this.
+
+%% Bibliography
+\bibliography{bibliography}
+
+\end{document}
+
