@@ -32,8 +32,8 @@
 #' performs the classical decomposition of the Brier score that was proposed by
 #' Murphy (1973); \code{method = "bias-corrected"} performs the bias-corrected
 #' decomposition proposed by Ferro and Fricker (2012), which is more appropriate
-#' for small sample sizes; \code{method = "isotonic"} performs the
-#' decomposition based on isotonic regression proposed by Dimitriadies et al. (2021).
+#' for small sample sizes; \code{method = "isotonic"} (the default) performs the
+#' decomposition based on isotonic regression proposed by Dimitriadis et al. (2021).
 #' See references below. Note that the bias-corrected approach may return negative
 #' estimates of the three terms.
 #'
@@ -91,7 +91,7 @@
 
 #' @rdname bs_decomp
 #' @export
-bs_decomp <- function(o, p, bins = NULL, method = "bias-corrected") {
+bs_decomp <- function(o, p, bins = NULL, method = "isotonic") {
   check_input(o, p)
   if (method == "isotonic") {
     terms <- bs_decomp_iso(o, p)
@@ -147,7 +147,7 @@ bs_decomp <- function(o, p, bins = NULL, method = "bias-corrected") {
 
 #' @rdname bs_decomp
 #' @export
-bs_decomp_cond <- function(o, p, states, bins = NULL, method = "bias-corrected"){
+bs_decomp_cond <- function(o, p, states, bins = NULL, method = "isotonic"){
   check_input(o, p, states)
   groups <- unique(states)
   n_j <- sapply(seq_along(groups), function(j) sum(states == groups[j]))

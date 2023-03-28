@@ -5,7 +5,7 @@
 \alias{bs_decomp_cond}
 \title{Decompositions of the Brier score}
 \usage{
-bs_decomp(o, p, bins = NULL, method = "bias-corrected")
+bs_decomp(o, p, bins = NULL, method = "isotonic")
 
 bs_decomp_cond(o, p, states, bins = NULL, method = "bias-corrected")
 }
@@ -50,8 +50,8 @@ The \code{method} argument takes three possible options: \code{method = "classic
 performs the classical decomposition of the Brier score that was proposed by
 Murphy (1973); \code{method = "bias-corrected"} performs the bias-corrected
 decomposition proposed by Ferro and Fricker (2012), which is more appropriate
-for small sample sizes; \code{method = "isotonic"} performs the
-decomposition based on isotonic regression proposed by Dimitriadies et al. (2021).
+for small sample sizes; \code{method = "isotonic"} (the default) performs the
+decomposition based on isotonic regression proposed by Dimitriadis et al. (2021).
 See references below. Note that the bias-corrected approach may return negative
 estimates of the three terms.
 
