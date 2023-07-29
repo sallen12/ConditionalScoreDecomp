@@ -5,6 +5,7 @@ This repository contains R code to reproduce the results presented in the paper
 > Allen, S., Ferro, C.A.T. and Kwasniok, F. (2023). 
 > A conditional decomposition of proper scores: quantifying the sources of information in a forecast.
 > Quarterly Journal of the Royal Meteorological Society.
+> [https://doi.org/10.1002/qj.4478](https://doi.org/10.1002/qj.4478)
 
 ## Conditional score decompositions
 
