@@ -23,6 +23,14 @@
 \newcommand{\ind}{\mathbbm{1}}
 \newcommand{\dd}{\hspace{0.1cm} \mathrm{d}}
 
+%\VignetteEngine{knitr::knitr}
+%\VignetteIndexEntry{main}
+%\VignetteDepends{ConditionalScoreDecomp,ggplot2}
+%\VignetteKeywords{comparative evaluation, predictive distributions, proper scoring rules, score decompositions, ANOVA, R}
+%\VignettePackage{ConditionalScoreDecomp}
+%\VignetteEncoding{UTF-8}
+
+
 <<preliminaries, echo=FALSE, results='hide'>>=
 # Using knitr for manuscript
 library(knitr)
