@@ -88,17 +88,19 @@ plot_decomp_waterfall <- function(terms_un = NULL, terms_cnd = NULL, title = "",
                      names = c("UNC_Y", "-RES_F", "REL_F", "Total"),
                      cols = as.factor(c(1, 2, 3, 4)))
     plot_un <- ggplot2::ggplot(df) +
-      ggplot2::geom_rect(ggplot2::aes(ymin = ymin_id - 0.45,
-                                      ymax = ymax_id + 0.45,
-                                      xmin = begin,
-                                      xmax = end,
-                                      fill = cols)) +
-      ggplot2::geom_text(ggplot2::aes(x = (begin + end)/2,
-                                      y = id,
-                                      label = sprintf(fmt, terms_un)),
+      ggplot2::geom_rect(ggplot2::aes_string(ymin = "ymin_id - 0.45",
+                                             ymax = "ymax_id + 0.45",
+                                             xmin = "begin",
+                                             xmax = "end",
+                                             fill = "cols")) +
+      ggplot2::geom_text(ggplot2::aes_string(x = "(begin + end)/2",
+                                             y = "id",
+                                             label = "sprintf(fmt, terms_un)"),
                          colour = c(rep("black", 3), "white")) +
       ggplot2::geom_vline(ggplot2::aes(xintercept = 0)) +
-      ggplot2::geom_linerange(ggplot2::aes(x = end, ymin = ymax_id + 0.45, ymax = ymax_id + 1 - 0.45),
+      ggplot2::geom_linerange(ggplot2::aes_string(x = "end",
+                                                  ymin = "ymax_id + 0.45",
+                                                  ymax = "ymax_id + 1 - 0.45"),
                               linewidth = 1, colour = c(rep("black", 3), "white")) +
       ggplot2::scale_fill_manual(values = c(scales::hue_pal()(3), "black")) +
       ggplot2::scale_x_continuous(name = NULL, expand = c(0, 0)) +
@@ -125,19 +127,19 @@ plot_decomp_waterfall <- function(terms_un = NULL, terms_cnd = NULL, title = "",
                      id = 1:8,
                      names = c("UNC_Y|A", "RES_A", "-RES_A", "-RES_F|A", "RES_A|F", "-RES_A|F", "REL_F|A", "Total"),
                      cols = as.factor(c(1, 1, 2, 2, 2, 3, 3, 4)))
-    plot_cnd <- ggplot2::ggplot(df) + ggplot2::geom_rect(ggplot2::aes(ymin = id - 0.45,
-                                                                      ymax = id + 0.45,
-                                                                      xmin = begin,
-                                                                      xmax = end,
-                                                                      fill = cols)) +
-      ggplot2::geom_text(ggplot2::aes(x = (begin + end)/2,
-                                      y = id,
-                                      label = sprintf(fmt, terms_cnd)),
+    plot_cnd <- ggplot2::ggplot(df) + ggplot2::geom_rect(ggplot2::aes_string(ymin = "id - 0.45",
+                                                                             ymax = "id + 0.45",
+                                                                             xmin = "begin",
+                                                                             xmax = "end",
+                                                                             fill = "cols")) +
+      ggplot2::geom_text(ggplot2::aes_string(x = "(begin + end)/2",
+                                             y = "id",
+                                             label = "sprintf(fmt, terms_cnd)"),
                          colour = c(rep("black", 7), "white")) +
       ggplot2::geom_vline(ggplot2::aes(xintercept = 0)) +
-      ggplot2::geom_linerange(ggplot2::aes(x = end,
-                                           ymin = id + 0.45,
-                                           ymax = id + 1 - 0.45),
+      ggplot2::geom_linerange(ggplot2::aes_string(x = "end",
+                                                  ymin = "id + 0.45",
+                                                  ymax = "id + 1 - 0.45"),
                               linewidth = 1,
                               colour = c(rep("black", 7), "white")) +
       ggplot2::scale_fill_manual(values = c(scales::hue_pal()(3), "black")) +
@@ -177,14 +179,14 @@ plot_decomp_bar <- function(terms_un = NULL, terms_cnd = NULL, title = "", dec_p
                      cols = as.factor(c(1, 2, 3, 4)))
     lim_low <- min(terms_un) - 0.1*abs(max(terms_un))
     lim_upp <- max(terms_un) + 0.05*abs(max(terms_un))
-    plot_un <- ggplot2::ggplot(df) + ggplot2::geom_rect(ggplot2::aes(ymin = ymin_id - 0.45,
-                                                                     ymax = ymax_id + 0.45,
-                                                                     xmin = 0,
-                                                                     xmax = end - begin,
-                                                                     fill = cols)) +
-      ggplot2::geom_text(ggplot2::aes(x = lim_low + 0.075*abs(max(terms_un)),
-                                      y = id,
-                                      label = sprintf(fmt, terms_un),
+    plot_un <- ggplot2::ggplot(df) + ggplot2::geom_rect(ggplot2::aes_string(ymin = "ymin_id - 0.45",
+                                                                            ymax = "ymax_id + 0.45",
+                                                                            xmin = 0,
+                                                                            xmax = "end - begin",
+                                                                            fill = "cols")) +
+      ggplot2::geom_text(ggplot2::aes_string(x = "lim_low + 0.075*abs(max(terms_un))",
+                                      y = "id",
+                                      label = "sprintf(fmt, terms_un)",
                                       fontface = 2),
                          colour = c(scales::hue_pal()(3), "black"), hjust = 1) +
       ggplot2::scale_fill_manual(values = c(scales::hue_pal()(3), "black")) +
@@ -226,15 +228,15 @@ plot_decomp_bar <- function(terms_un = NULL, terms_cnd = NULL, title = "", dec_p
                    names = c("UNC_Y|A", "RES_A", "-RES_A", "-RES_F|A", "RES_A|F", "-RES_A|F", "REL_F|A", "Total"),
                    cols = as.factor(c(1, 1, 2, 2, 2, 3, 3, 4)))
 
-  plot_cnd <- ggplot2::ggplot(df) + ggplot2::geom_rect(ggplot2::aes(ymin = id - 0.45,
-                                                                    ymax = id + 0.45,
-                                                                    xmin = 0,
-                                                                    xmax = end - begin,
-                                                                    fill = cols)) +
-    ggplot2::geom_text(ggplot2::aes(x = text_pos,
-                                    y = id,
-                                    label = sprintf(fmt, terms_cnd),
-                                    fontface = 2),
+  plot_cnd <- ggplot2::ggplot(df) + ggplot2::geom_rect(ggplot2::aes_string(ymin = "id - 0.45",
+                                                                           ymax = "id + 0.45",
+                                                                           xmin = 0,
+                                                                           xmax = "end - begin",
+                                                                           fill = "cols")) +
+    ggplot2::geom_text(ggplot2::aes_string(x = "text_pos",
+                                           y = "id",
+                                           label = "sprintf(fmt, terms_cnd)",
+                                           fontface = 2),
                        colour = c(scales::hue_pal()(3), "black")[df$cols], hjust = 1) +
     ggplot2::scale_fill_manual(values = c(scales::hue_pal()(3), "black")) +
     ggplot2::scale_x_continuous(name = NULL, limits = c(lim_low, lim_upp)) +

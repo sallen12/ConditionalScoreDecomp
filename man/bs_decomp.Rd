@@ -7,7 +7,7 @@
 \usage{
 bs_decomp(o, p, bins = NULL, method = "isotonic")
 
-bs_decomp_cond(o, p, states, bins = NULL, method = "bias-corrected")
+bs_decomp_cond(o, p, states, bins = NULL, method = "isotonic")
 }
 \arguments{
 \item{o}{vector of binary outcomes.}
