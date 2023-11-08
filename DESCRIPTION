@@ -4,24 +4,23 @@ Title: Conditional decomposition of the Brier score into uncertainty, resolution
 Version: 0.1.0
 Date: 2023-02-03
 Authors@R:
-    c(person(given = "Sam", family = "Allen", email = "sam.allen@unibe.ch", role = c("cre", "aut")),
-    person(given = "Uni", family = "Bern", role = "cph"))
+    c(person(given = "Sam", family = "Allen", email = "sam.allen@unibe.ch", role = c("cre", "aut")))
 Description: Functions to assess probability forecasts for binary events using 
     the Brier score, and decompose the score into measures of forecast
     uncertainty, resolution, and reliability. This decomposition can also be
     performed conditional on certain events having occurred.
 URL: https://github.com/sallen12/ConditionalScoreDecomp
-License: MIT + file LICENSE
+License: GPL (>= 2)
 Encoding: UTF-8
 LazyData: true
 Imports: 
     ggplot2,
     gridExtra,
-    scales
+    scales,
+    reliabilitydiag
 Suggests: 
-    knitr,
-    rmarkdown
+    knitr
 VignetteBuilder: knitr
-RoxygenNote: 7.2.2
+RoxygenNote: 7.2.3
 Depends: 
     R (>= 2.10)
